@@ -11,6 +11,7 @@ const eventRoutes = require('./routes/event.routes');
 const notificationRoutes = require('./routes/notification.routes');
 const messageRoutes = require('./routes/message.routes');
 const workspaceRoutes = require('./routes/workspace.routes');
+const resourceRoutes = require('./routes/resource.routes');
 const { errorHandler } = require('./middleware/error.middleware');
 
 const app = express();
@@ -48,6 +49,7 @@ app.use('/api/events', eventRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/workspaces', workspaceRoutes);
+app.use('/api/resources', resourceRoutes);
 
 // ─── 404 Handler ─────────────────────────────────────────────────────────────
 
