@@ -6,6 +6,7 @@ const {
   getUserById,
   updateProfile,
   uploadResume,
+  deleteResumeHandler,
   uploadAvatar,
 } = require('../controllers/user.controller');
 const { protect } = require('../middleware/auth.middleware');
@@ -41,6 +42,12 @@ router.patch('/profile', updateProfileValidator, updateProfile);
  * uploadResume is [multerMiddleware, handler].
  */
 router.post('/resume', uploadResume);
+
+/**
+ * DELETE /api/users/resume
+ * Delete the authenticated user's resume.
+ */
+router.delete('/resume', deleteResumeHandler);
 
 /**
  * POST /api/users/avatar

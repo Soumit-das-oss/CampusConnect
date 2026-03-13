@@ -1,15 +1,21 @@
+import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { sendRequest } from '../services/connectionService'
 
 function ConnectionButton({ userId, connectionStatus }) {
   const queryClient = useQueryClient()
+  const [justSent, setJustSent] = useState(false)
 
   const { mutate, isPending } = useMutation({
     mutationFn: () => sendRequest(userId),
     onSuccess: () => {
+      setJustSent(true)
       queryClient.invalidateQueries({ queryKey: ['users'] })
       queryClient.invalidateQueries({ queryKey: ['user', userId] })
       queryClient.invalidateQueries({ queryKey: ['connections'] })
+      
+      // Reset the "just sent" state after 3 seconds
+      setTimeout(() => setJustSent(false), 3000)
     },
   })
 
@@ -24,13 +30,13 @@ function ConnectionButton({ userId, connectionStatus }) {
     )
   }
 
-  if (connectionStatus === 'pending') {
+  if (connectionStatus === 'pending' || justSent) {
     return (
       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-yellow-900/30 border border-yellow-700/40 text-yellow-400 rounded-lg text-xs font-medium">
-        <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6l4 2" />
         </svg>
-        Pending
+        {justSent ? 'Request Sent' : 'Pending'}
       </span>
     )
   }
@@ -43,7 +49,10 @@ function ConnectionButton({ userId, connectionStatus }) {
         className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-700 hover:bg-indigo-600 border border-gray-600 hover:border-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-gray-400 hover:text-white rounded-lg text-xs font-medium transition-all"
       >
         {isPending ? (
-          <span className="inline-block w-3 h-3 border border-t-white rounded-full animate-spin" />
+          <>
+            <span className="inline-block w-3 h-3 border border-t-white border-white/30 rounded-full animate-spin" />
+            Sending...
+          </>
         ) : (
           '+ Connect'
         )}

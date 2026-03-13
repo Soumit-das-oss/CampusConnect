@@ -4,7 +4,7 @@ import Navbar from '../components/Navbar'
 import Sidebar from '../components/Sidebar'
 import useAuth from '../hooks/useAuth'
 import useUserStore from '../store/userStore'
-import { updateProfile, uploadAvatar, uploadResume } from '../services/userService'
+import { updateProfile, uploadAvatar, uploadResume, deleteResume } from '../services/userService'
 import { getInitials } from '../utils/helpers'
 
 function ProfilePage() {
@@ -23,6 +23,7 @@ function ProfilePage() {
   const [successMsg, setSuccessMsg] = useState('')
   const [formError, setFormError] = useState('')
   const [resumeError, setResumeError] = useState('')
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
   const resumeInputRef = useRef(null)
   const prevExtractedAt = useRef(user?.resumeData?.extractedAt ?? null)
 
@@ -101,6 +102,24 @@ function ProfilePage() {
     onError: (err) => {
       setAiAnalyzing(false)
       setResumeError(err.response?.data?.message || 'Failed to upload resume. Please try again.')
+    },
+  })
+
+  const { mutate: deleteMutate, isPending: deletingResume } = useMutation({
+    mutationFn: deleteResume,
+    onSuccess: (data) => {
+      if (data.user) {
+        updateUser(data.user)
+      } else {
+        updateUser({ resumeUrl: null, resumeData: null })
+      }
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+      setResumeError('')
+      setAiAnalyzing(false)
+      showSuccess('Resume deleted successfully.')
+    },
+    onError: (err) => {
+      setResumeError(err.response?.data?.message || 'Failed to delete resume.')
     },
   })
 
@@ -376,15 +395,30 @@ function ProfilePage() {
                   <span className="text-2xl">📄</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-gray-300 text-sm font-medium">Current resume</p>
-                    <a
-                      href={user.resumeUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      download
-                      className="text-indigo-400 hover:text-indigo-300 text-xs underline inline-block"
-                    >
-                      View / Download
-                    </a>
+                    <div className="flex gap-3 mt-1">
+                      <a
+                        href={user.resumeUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-indigo-400 hover:text-indigo-300 text-xs underline inline-block"
+                      >
+                        View
+                      </a>
+                      <a
+                        href={user.resumeUrl}
+                        download
+                        className="text-emerald-400 hover:text-emerald-300 text-xs underline inline-block"
+                      >
+                        Download
+                      </a>
+                      <button
+                        onClick={() => setShowDeleteModal(true)}
+                        disabled={deletingResume}
+                        className="text-red-400 hover:text-red-300 text-xs underline disabled:opacity-50"
+                      >
+                        {deletingResume ? 'Deleting...' : 'Delete'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -532,6 +566,37 @@ function ProfilePage() {
           </div>
         </main>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 border border-gray-700 rounded-2xl p-6 max-w-md w-full">
+            <h3 className="text-white text-lg font-semibold mb-3">Delete Resume</h3>
+            <p className="text-gray-300 text-sm mb-6">
+              Are you sure you want to delete your resume? This action cannot be undone.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                disabled={deletingResume}
+                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  deleteMutate()
+                  setShowDeleteModal(false)
+                }}
+                disabled={deletingResume}
+                className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                {deletingResume ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

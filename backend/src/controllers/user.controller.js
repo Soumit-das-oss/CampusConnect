@@ -4,6 +4,8 @@ const path = require('path');
 const multer = require('multer');
 const { validationResult } = require('express-validator');
 const { uploadImage, cloudinary } = require('../config/cloudinary');
+const { uploadToS3, deleteFromS3 } = require('../config/aws');
+const Connection = require('../models/Connection');
 const {
   findUsersByCollege,
   findUserById,
@@ -25,33 +27,57 @@ function handleValidationErrors(req, res) {
   return false;
 }
 
-/** Stream a Buffer directly to Cloudinary as a raw document. */
-function uploadBufferToCloudinary(buffer, originalname) {
-  const ext = path.extname(originalname || '').toLowerCase() || '.pdf';
-  // Sanitize the base filename (strip extension, remove non-alphanumeric chars)
-  const baseName = path.basename(originalname || 'resume', ext)
-    .replace(/[^a-zA-Z0-9-_]/g, '')
-    .slice(0, 50) || 'resume';
-  const publicId = `resume-${Date.now()}-${baseName}${ext}`;
+/** Upload a Buffer to AWS S3 or fallback to Cloudinary */
+async function uploadBufferToS3(buffer, originalname) {
+  // Check if AWS is configured
+  const useAWS = process.env.AWS_ACCESS_KEY_ID && 
+                 process.env.AWS_SECRET_ACCESS_KEY && 
+                 process.env.AWS_S3_BUCKET_NAME;
 
-  return new Promise((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream(
-      {
-        folder: 'campusconnect_uploads/documents',
-        resource_type: 'raw',
-        use_filename: true,
-        unique_filename: true,
-        public_id: publicId,
-        access_mode: 'public',  // Make the file publicly accessible
-        type: 'upload',         // Use 'upload' type for public access
-      },
-      (error, result) => {
-        if (error) reject(error);
-        else resolve(result);
-      }
-    );
-    stream.end(buffer);
-  });
+  if (useAWS) {
+    // Use AWS S3
+    const ext = path.extname(originalname || '').toLowerCase() || '.pdf';
+    const baseName = path.basename(originalname || 'resume', ext)
+      .replace(/[^a-zA-Z0-9-_]/g, '')
+      .slice(0, 50) || 'resume';
+    
+    const timestamp = Date.now();
+    const key = `campusconnect/resumes/${timestamp}-${baseName}${ext}`;
+    
+    let contentType = 'application/pdf';
+    if (ext === '.doc') contentType = 'application/msword';
+    if (ext === '.docx') contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    
+    const url = await uploadToS3(buffer, key, contentType);
+    return { secure_url: url };
+  } else {
+    // Fallback to Cloudinary
+    console.log('[Resume] AWS not configured, using Cloudinary fallback');
+    const ext = path.extname(originalname || '').toLowerCase() || '.pdf';
+    const baseName = path.basename(originalname || 'resume', ext)
+      .replace(/[^a-zA-Z0-9-_]/g, '')
+      .slice(0, 50) || 'resume';
+    const publicId = `resume-${Date.now()}-${baseName}`;
+
+    return new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        {
+          folder: 'campusconnect_uploads/documents',
+          resource_type: 'raw',
+          use_filename: true,
+          unique_filename: true,
+          public_id: publicId,
+          access_mode: 'public',
+          type: 'upload',
+        },
+        (error, result) => {
+          if (error) reject(error);
+          else resolve(result);
+        }
+      );
+      stream.end(buffer);
+    });
+  }
 }
 
 /**
@@ -118,14 +144,37 @@ async function getAllUsers(req, res, next) {
     }
 
     const users = await findUsersByCollege(collegeId, skillsFilter);
-    
+
     // Filter out the current user from results
     const filteredUsers = users.filter(user => user._id.toString() !== currentUserId);
 
+    // Build a connection status map for the current user so the frontend
+    // can show the correct ConnectionButton state and hide/show Message button
+    const connections = await Connection.find({
+      $or: [
+        { senderId: req.user._id },
+        { receiverId: req.user._id },
+      ],
+    }).select('senderId receiverId status');
+
+    const statusMap = {};
+    for (const conn of connections) {
+      const otherId =
+        conn.senderId.toString() === currentUserId
+          ? conn.receiverId.toString()
+          : conn.senderId.toString();
+      statusMap[otherId] = conn.status;
+    }
+
+    const usersWithStatus = filteredUsers.map((u) => {
+      const obj = u.toObject({ virtuals: true });
+      return { ...obj, connectionStatus: statusMap[obj._id.toString()] || null };
+    });
+
     res.status(200).json({
       success: true,
-      count: filteredUsers.length,
-      data: { users: filteredUsers },
+      count: usersWithStatus.length,
+      data: { users: usersWithStatus },
     });
   } catch (error) {
     next(error);
@@ -147,9 +196,20 @@ async function getUserById(req, res, next) {
       });
     }
 
+    // Attach connection status between the viewer and this user
+    const connection = await Connection.findOne({
+      $or: [
+        { senderId: req.user._id, receiverId: req.params.id },
+        { senderId: req.params.id, receiverId: req.user._id },
+      ],
+    }).select('status');
+
+    const userObj = user.toObject({ virtuals: true });
+    userObj.connectionStatus = connection?.status || null;
+
     res.status(200).json({
       success: true,
-      data: { user },
+      data: { user: userObj },
     });
   } catch (error) {
     next(error);
@@ -230,15 +290,15 @@ async function uploadResumeHandler(req, res, next) {
     console.log(`[Resume] File received: ${req.file.originalname} (${req.file.mimetype}, ${req.file.size} bytes)`);
     const { buffer, originalname } = req.file;
 
-    // ── Step 1: Upload to Cloudinary ──────────────────────────────────────────
+    // ── Step 1: Upload to AWS S3 ──────────────────────────────────────────
     let resumeUrl;
     try {
-      console.log('[Resume] Starting Cloudinary upload...');
-      const cloudResult = await uploadBufferToCloudinary(buffer, originalname);
-      resumeUrl = cloudResult.secure_url;
-      console.log('[Resume] Cloudinary upload done:', resumeUrl);
-    } catch (cloudErr) {
-      console.error('[Resume] Cloudinary upload failed:', cloudErr.message);
+      console.log('[Resume] Starting S3 upload...');
+      const s3Result = await uploadBufferToS3(buffer, originalname);
+      resumeUrl = s3Result.secure_url;
+      console.log('[Resume] S3 upload done:', resumeUrl);
+    } catch (s3Err) {
+      console.error('[Resume] S3 upload failed:', s3Err.message);
       return res.status(502).json({
         success: false,
         message: 'Failed to store resume file. Please try again.',
@@ -312,6 +372,66 @@ async function uploadResumeHandler(req, res, next) {
  */
 const uploadResume = [uploadResumeMiddleware, uploadResumeHandler];
 
+/**
+ * DELETE /api/users/resume
+ * Delete the authenticated user's resume from S3/Cloudinary and database.
+ */
+async function deleteResumeHandler(req, res, next) {
+  try {
+    console.log(`[Resume] Delete request from user: ${req.user?._id}`);
+
+    const user = await findUserById(req.user._id);
+    
+    if (!user.resumeUrl) {
+      return res.status(404).json({
+        success: false,
+        message: 'No resume found to delete.',
+      });
+    }
+
+    // Delete from storage (S3 or Cloudinary)
+    try {
+      const useAWS = process.env.AWS_ACCESS_KEY_ID && 
+                     process.env.AWS_SECRET_ACCESS_KEY && 
+                     process.env.AWS_S3_BUCKET_NAME;
+
+      if (useAWS && user.resumeUrl.includes('amazonaws.com')) {
+        console.log('[Resume] Deleting from S3:', user.resumeUrl);
+        await deleteFromS3(user.resumeUrl);
+        console.log('[Resume] S3 deletion successful');
+      } else if (user.resumeUrl.includes('cloudinary.com')) {
+        console.log('[Resume] Deleting from Cloudinary:', user.resumeUrl);
+        // Extract public_id from Cloudinary URL
+        const urlParts = user.resumeUrl.split('/');
+        const fileWithExt = urlParts[urlParts.length - 1];
+        const publicId = `campusconnect_uploads/documents/${fileWithExt.split('.')[0]}`;
+        await cloudinary.uploader.destroy(publicId, { resource_type: 'raw' });
+        console.log('[Resume] Cloudinary deletion successful');
+      }
+    } catch (deleteErr) {
+      console.error('[Resume] Storage deletion failed:', deleteErr.message);
+      // Continue anyway to clear DB record
+    }
+
+    // Clear from database
+    await updateUserProfile(req.user._id, { 
+      resumeUrl: null,
+      resumeData: null 
+    });
+    console.log('[Resume] Database record cleared');
+
+    const updatedUser = await findUserById(req.user._id);
+
+    res.status(200).json({
+      success: true,
+      message: 'Resume deleted successfully.',
+      data: { user: updatedUser },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 // ─── Upload Avatar ────────────────────────────────────────────────────────────
 
 const uploadAvatarMiddleware = uploadImage.single('avatar');
@@ -350,5 +470,6 @@ module.exports = {
   getUserById,
   updateProfile,
   uploadResume,
+  deleteResumeHandler,
   uploadAvatar,
 };

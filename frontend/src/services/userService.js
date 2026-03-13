@@ -25,6 +25,11 @@ export const uploadResume = async (formData) => {
   return response.data.data
 }
 
+export const deleteResume = async () => {
+  const response = await api.delete('/users/resume')
+  return response.data.data
+}
+
 export const uploadAvatar = async (formData) => {
   const response = await api.post('/users/avatar', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
