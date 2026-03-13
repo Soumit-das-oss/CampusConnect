@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import Navbar from '../components/Navbar'
 import Sidebar from '../components/Sidebar'
@@ -136,12 +136,20 @@ function StudentProfilePage() {
                         <p className="text-gray-500 text-sm mt-0.5">{user.email}</p>
                       )}
                     </div>
-                    <div className="flex-shrink-0">
+                    <div className="flex-shrink-0 flex items-center gap-2">
                       {!isOwnProfile && (
-                        <ConnectionButton
-                          userId={user._id || user.id}
-                          connectionStatus={user.connectionStatus}
-                        />
+                        <>
+                          <ConnectionButton
+                            userId={user._id || user.id}
+                            connectionStatus={user.connectionStatus}
+                          />
+                          <Link
+                            to={`/messages/${user._id || user.id}`}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 border border-gray-600 hover:border-gray-500 text-white text-sm font-medium transition-all"
+                          >
+                            💬 Message
+                          </Link>
+                        </>
                       )}
                     </div>
                   </div>

@@ -49,7 +49,7 @@ async function createEvent(req, res, next) {
   try {
     if (handleValidationErrors(req, res)) return;
 
-    const { title, description, date, venue, category } = req.body;
+    const { title, description, date, venue, category, meetLink, customCategory } = req.body;
     const collegeId = req.user.collegeId?._id || req.user.collegeId;
     // Banner image uploaded via multer → Cloudinary; falls back to null if not provided
     const imageUrl = req.file?.path || null;
@@ -61,6 +61,8 @@ async function createEvent(req, res, next) {
       date,
       venue,
       category: category || 'other',
+      customCategory: category === 'other' && customCategory?.trim() ? customCategory.trim() : null,
+      meetLink: meetLink?.trim() || null,
       imageUrl: imageUrl || null,
       organizer: req.user._id,
       collegeId,

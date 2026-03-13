@@ -67,7 +67,7 @@ function UserCard({ user }) {
         </div>
       )}
 
-      {/* Footer: view link + connect button */}
+      {/* Footer: view link + message (if connected) + connect button */}
       <div className="flex items-center justify-between pt-3 border-t border-gray-700/40">
         <Link
           to={`/profile/${id}`}
@@ -75,7 +75,17 @@ function UserCard({ user }) {
         >
           View Profile →
         </Link>
-        <ConnectionButton userId={id} connectionStatus={connectionStatus} />
+        <div className="flex items-center gap-2">
+          {connectionStatus === 'accepted' && (
+            <Link
+              to={`/messages/${id}`}
+              className="text-xs px-2.5 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 border border-gray-600 text-white font-medium transition-all"
+            >
+              💬 Message
+            </Link>
+          )}
+          <ConnectionButton userId={id} connectionStatus={connectionStatus} />
+        </div>
       </div>
     </div>
   )

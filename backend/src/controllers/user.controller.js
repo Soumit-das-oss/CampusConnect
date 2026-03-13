@@ -1,5 +1,6 @@
 'use strict';
 
+const path = require('path');
 const multer = require('multer');
 const { validationResult } = require('express-validator');
 const { uploadImage, cloudinary } = require('../config/cloudinary');
@@ -25,13 +26,24 @@ function handleValidationErrors(req, res) {
 }
 
 /** Stream a Buffer directly to Cloudinary as a raw document. */
-function uploadBufferToCloudinary(buffer) {
+function uploadBufferToCloudinary(buffer, originalname) {
+  const ext = path.extname(originalname || '').toLowerCase() || '.pdf';
+  // Sanitize the base filename (strip extension, remove non-alphanumeric chars)
+  const baseName = path.basename(originalname || 'resume', ext)
+    .replace(/[^a-zA-Z0-9-_]/g, '')
+    .slice(0, 50) || 'resume';
+  const publicId = `resume-${Date.now()}-${baseName}${ext}`;
+
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
       {
         folder: 'campusconnect_uploads/documents',
         resource_type: 'raw',
-        public_id: `resume_${Date.now()}`,
+        use_filename: true,
+        unique_filename: true,
+        public_id: publicId,
+        access_mode: 'public',  // Make the file publicly accessible
+        type: 'upload',         // Use 'upload' type for public access
       },
       (error, result) => {
         if (error) reject(error);
@@ -43,14 +55,24 @@ function uploadBufferToCloudinary(buffer) {
 }
 
 /**
- * Send the resume buffer to Gemini and parse the extracted JSON.
- * Returns null (instead of throwing) if AI extraction fails.
+ * Extract text from PDF buffer, then send to Grok as plain text.
+ * This approach works with any OpenAI-compatible model — no multimodal/inlineData needed.
  */
-async function extractWithGemini(buffer, mimeType) {
-  const { model } = require('../config/gemini');
+async function extractWithGemini(buffer) {
+  // Step 1: Extract plain text from the PDF
+  const pdf = require('pdf-parse');
+  const pdfData = await pdf(buffer);
+  const resumeText = pdfData.text;
+
+  if (!resumeText || resumeText.trim().length < 50) {
+    throw new Error('Could not extract sufficient text from the PDF.');
+  }
+
+  // Step 2: Send text to Grok
+  const { grokClient } = require('../config/gemini');
 
   const prompt =
-    'You are a resume parser. Analyze this resume and return ONLY a raw JSON object ' +
+    'You are a resume parser. Analyze the following resume text and return ONLY a raw JSON object ' +
     '(no markdown, no code fences) with this exact structure:\n' +
     '{\n' +
     '  "summary": "brief 1-2 sentence professional summary",\n' +
@@ -58,22 +80,20 @@ async function extractWithGemini(buffer, mimeType) {
     '  "education": [{ "institution": "name", "degree": "degree title", "year": "graduation year" }],\n' +
     '  "experience": [{ "company": "company name", "role": "job title", "duration": "time period" }]\n' +
     '}\n' +
-    'Extract every technical skill, tool, framework, and language mentioned. Return ONLY valid JSON.';
+    'Extract every technical skill, tool, framework, and language mentioned. Return ONLY valid JSON.\n\n' +
+    'RESUME TEXT:\n' + resumeText;
 
-  const result = await model.generateContent([
-    {
-      inlineData: {
-        data: buffer.toString('base64'),
-        mimeType,
-      },
-    },
-    prompt,
-  ]);
+  const completion = await grokClient.chat.completions.create({
+    model: 'llama-3.1-8b-instant',
+    messages: [{ role: 'user', content: prompt }],
+  });
 
-  const text = result.response.text().trim();
-  // Strip markdown code fences if the model wraps in them
-  const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
-  return JSON.parse(cleaned);
+  const text = completion.choices[0].message.content.trim();
+  // Strip markdown fences, then find the first JSON object in the response
+  const stripped = text.replace(/```(?:json)?/gi, '').trim();
+  const jsonMatch = stripped.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error(`Grok returned no JSON object. Raw response: ${text.slice(0, 200)}`);
+  return JSON.parse(jsonMatch[0]);
 }
 
 // ─── Controllers ──────────────────────────────────────────────────────────────
@@ -86,6 +106,7 @@ async function extractWithGemini(buffer, mimeType) {
 async function getAllUsers(req, res, next) {
   try {
     const collegeId = req.user.collegeId._id || req.user.collegeId;
+    const currentUserId = req.user._id.toString();
     const skillsParam = req.query.skills;
 
     let skillsFilter = null;
@@ -97,11 +118,14 @@ async function getAllUsers(req, res, next) {
     }
 
     const users = await findUsersByCollege(collegeId, skillsFilter);
+    
+    // Filter out the current user from results
+    const filteredUsers = users.filter(user => user._id.toString() !== currentUserId);
 
     res.status(200).json({
       success: true,
-      count: users.length,
-      data: { users },
+      count: filteredUsers.length,
+      data: { users: filteredUsers },
     });
   } catch (error) {
     next(error);
@@ -171,8 +195,8 @@ async function updateProfile(req, res, next) {
 // ─── Upload Resume ────────────────────────────────────────────────────────────
 
 /**
- * Multer memory storage — gives us the buffer so we can pass it to Gemini
- * before streamingt to Cloudinary.
+ * Multer memory storage — gives us the buffer so we can pass it to Grok
+ * before streaming to Cloudinary.
  */
 const uploadResumeMiddleware = multer({
   storage: multer.memoryStorage(),
@@ -193,63 +217,88 @@ const uploadResumeMiddleware = multer({
 
 async function uploadResumeHandler(req, res, next) {
   try {
+    console.log(`[Resume] Upload request from user: ${req.user?._id}`);
+
     if (!req.file) {
+      console.warn('[Resume] No file in request — multer found nothing');
       return res.status(400).json({
         success: false,
         message: 'No file uploaded. Please attach a resume file.',
       });
     }
 
-    const { buffer, mimetype } = req.file;
+    console.log(`[Resume] File received: ${req.file.originalname} (${req.file.mimetype}, ${req.file.size} bytes)`);
+    const { buffer, originalname } = req.file;
 
-    // Upload to Cloudinary and run Gemini extraction in parallel
-    const [cloudResult, geminiResult] = await Promise.allSettled([
-      uploadBufferToCloudinary(buffer),
-      extractWithGemini(buffer, mimetype),
-    ]);
-
-    if (cloudResult.status === 'rejected') {
-      throw cloudResult.reason;
+    // ── Step 1: Upload to Cloudinary ──────────────────────────────────────────
+    let resumeUrl;
+    try {
+      console.log('[Resume] Starting Cloudinary upload...');
+      const cloudResult = await uploadBufferToCloudinary(buffer, originalname);
+      resumeUrl = cloudResult.secure_url;
+      console.log('[Resume] Cloudinary upload done:', resumeUrl);
+    } catch (cloudErr) {
+      console.error('[Resume] Cloudinary upload failed:', cloudErr.message);
+      return res.status(502).json({
+        success: false,
+        message: 'Failed to store resume file. Please try again.',
+      });
     }
 
-    const resumeUrl = cloudResult.value.secure_url;
-    const updates = { resumeUrl };
+    // ── Step 2: Save resumeUrl to DB ──────────────────────────────────────────
+    await updateUserProfile(req.user._id, { resumeUrl });
+    console.log('[Resume] resumeUrl saved to DB');
 
-    let resumeData = null;
-
-    if (geminiResult.status === 'fulfilled') {
-      const { summary, skills: extractedSkills, education, experience } = geminiResult.value;
-
-      // Merge AI-extracted skills with the user's existing skills (deduped)
-      const existing = Array.isArray(req.user.skills) ? req.user.skills : [];
-      const merged = [
-        ...new Set([
-          ...existing,
-          ...(extractedSkills || []).map((s) => s.trim()).filter(Boolean),
-        ]),
-      ];
-
-      resumeData = {
-        summary: summary || null,
-        skills: extractedSkills || [],
-        education: education || [],
-        experience: experience || [],
-        extractedAt: new Date(),
-      };
-
-      updates.skills = merged;
-      updates.resumeData = resumeData;
-    }
-
-    const user = await updateUserProfile(req.user._id, updates);
-
+    // ── Step 3: Respond immediately — don't block on AI ───────────────────────
+    const user = await findUserById(req.user._id);
+    console.log('[Resume] Sending 200 response to client');
     res.status(200).json({
       success: true,
-      message:
-        geminiResult.status === 'fulfilled'
-          ? 'Resume uploaded and AI analysis complete.'
-          : 'Resume uploaded. (AI analysis unavailable — check GEMINI_API_KEY)',
-      data: { resumeUrl, resumeData, user },
+      message: 'Resume uploaded. AI analysis running in background...',
+      data: { resumeUrl, resumeData: null, user },
+    });
+
+    // ── Step 4: AI extraction in background (fire-and-forget) ─────────────────
+    // Response already sent — this runs after client receives it.
+    setImmediate(async () => {
+      const userId = req.user._id;
+      const existingSkills = Array.isArray(req.user.skills) ? req.user.skills : [];
+      try {
+        const extracted = await extractWithGemini(buffer);
+        const { summary, skills: extractedSkills, education, experience } = extracted;
+
+        const merged = [
+          ...new Set([
+            ...existingSkills,
+            ...(extractedSkills || []).map((s) => s.trim()).filter(Boolean),
+          ]),
+        ];
+
+        const resumeData = {
+          summary: summary || null,
+          skills: extractedSkills || [],
+          education: education || [],
+          experience: experience || [],
+          extractedAt: new Date(),
+        };
+
+        await updateUserProfile(userId, { skills: merged, resumeData });
+
+        // Push result to user's personal socket room
+        const { getIO } = require('../config/socket');
+        try {
+          getIO().to(`user:${userId}`).emit('resume:analyzed', { resumeData, skills: merged });
+        } catch (_) { }
+
+        console.log(`[Grok] AI extraction complete for user ${userId}`);
+      } catch (err) {
+        console.error('[Grok] Background extraction failed:', err.message);
+        // Notify client so they know AI failed
+        const { getIO } = require('../config/socket');
+        try {
+          getIO().to(`user:${userId}`).emit('resume:analyzed', { resumeData: null, error: err.message });
+        } catch (_) { }
+      }
     });
   } catch (error) {
     next(error);

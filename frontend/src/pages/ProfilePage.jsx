@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import Navbar from '../components/Navbar'
 import Sidebar from '../components/Sidebar'
@@ -10,6 +10,8 @@ import { getInitials } from '../utils/helpers'
 function ProfilePage() {
   const { user } = useAuth()
   const updateUser = useUserStore((state) => state.updateUser)
+  const aiAnalyzing = useUserStore((state) => state.resumeAiAnalyzing)
+  const setAiAnalyzing = useUserStore((state) => state.setResumeAiAnalyzing)
   const queryClient = useQueryClient()
 
   const [formData, setFormData] = useState({
@@ -20,6 +22,9 @@ function ProfilePage() {
   })
   const [successMsg, setSuccessMsg] = useState('')
   const [formError, setFormError] = useState('')
+  const [resumeError, setResumeError] = useState('')
+  const resumeInputRef = useRef(null)
+  const prevExtractedAt = useRef(user?.resumeData?.extractedAt ?? null)
 
   // Sync form with current user data
   useEffect(() => {
@@ -30,12 +35,23 @@ function ProfilePage() {
       skills: Array.isArray(user.skills) ? user.skills.join(', ') : (user.skills || ''),
       projects: Array.isArray(user.projects)
         ? user.projects
-            .map((p) => (typeof p === 'string' ? p : p.title || p.name || ''))
-            .filter(Boolean)
-            .join('\n')
+          .map((p) => (typeof p === 'string' ? p : p.title || p.name || ''))
+          .filter(Boolean)
+          .join('\n')
         : '',
     })
   }, [user])
+
+  // When socket pushes resume:analyzed with success, show toast
+  // (aiAnalyzing is cleared by useSocket.js via Zustand — works for both success and failure)
+  useEffect(() => {
+    const currentAt = user?.resumeData?.extractedAt ?? null
+    if (currentAt && currentAt !== prevExtractedAt.current) {
+      showSuccess('AI analysis complete! Skills have been updated.')
+    }
+    prevExtractedAt.current = currentAt
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.resumeData?.extractedAt])
 
   const showSuccess = (msg) => {
     setSuccessMsg(msg)
@@ -72,17 +88,19 @@ function ProfilePage() {
   const { mutate: resumeMutate, isPending: uploadingResume } = useMutation({
     mutationFn: uploadResume,
     onSuccess: (data) => {
-      // data = { resumeUrl, resumeData, user } — update entire user so skills + resumeData refresh
-      updateUser(data.user)
+      // Backend responds immediately after Cloudinary — AI runs in background via socket
+      // Update ONLY the resumeUrl field to avoid conflicts with stale data
+      if (data.resumeUrl) {
+        updateUser({ resumeUrl: data.resumeUrl })
+      }
       queryClient.invalidateQueries({ queryKey: ['users'] })
-      showSuccess(
-        data.resumeData
-          ? 'Resume uploaded & AI analysis complete! Skills have been updated.'
-          : 'Resume uploaded successfully!'
-      )
+      setResumeError('')
+      setAiAnalyzing(true)   // socket 'resume:analyzed' (via useSocket.js) will clear this
+      showSuccess('Resume uploaded! AI analysis running in background...')
     },
     onError: (err) => {
-      setFormError(err.response?.data?.message || 'Failed to upload resume.')
+      setAiAnalyzing(false)
+      setResumeError(err.response?.data?.message || 'Failed to upload resume. Please try again.')
     },
   })
 
@@ -132,9 +150,28 @@ function ProfilePage() {
   const handleResumeChange = (e) => {
     const file = e.target.files[0]
     if (!file) return
+
+    const allowedTypes = ['application/pdf', 'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
+    if (!allowedTypes.includes(file.type)) {
+      setResumeError('Invalid file type. Please upload a PDF, DOC, or DOCX file.')
+      // Reset input after error
+      if (resumeInputRef.current) resumeInputRef.current.value = ''
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setResumeError('File is too large. Maximum size is 10MB.')
+      // Reset input after error
+      if (resumeInputRef.current) resumeInputRef.current.value = ''
+      return
+    }
+
+    setResumeError('')
     const fd = new FormData()
     fd.append('resume', file)
     resumeMutate(fd)
+    // Reset input after successful submission so the same file can be re-selected next time
+    if (resumeInputRef.current) resumeInputRef.current.value = ''
   }
 
   const previewSkills = formData.skills
@@ -189,9 +226,8 @@ function ProfilePage() {
                 </div>
                 <div>
                   <label
-                    className={`cursor-pointer inline-flex items-center gap-2 bg-gray-700 hover:bg-gray-600 border border-gray-600 hover:border-gray-500 text-gray-300 hover:text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                      uploadingAvatar ? 'opacity-50 cursor-not-allowed' : ''
-                    }`}
+                    className={`cursor-pointer inline-flex items-center gap-2 bg-gray-700 hover:bg-gray-600 border border-gray-600 hover:border-gray-500 text-gray-300 hover:text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${uploadingAvatar ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
                   >
                     {uploadingAvatar ? (
                       <>
@@ -336,7 +372,7 @@ function ProfilePage() {
               <h2 className="text-white font-semibold mb-4">Resume / CV</h2>
 
               {user?.resumeUrl && (
-                <div className="flex items-center gap-3 bg-gray-700/60 border border-gray-600 rounded-xl p-3 mb-4">
+                <div className="flex items-center gap-3 bg-gray-700/60 border border-gray-600 rounded-xl p-3 mb-4" key={user.resumeUrl}>
                   <span className="text-2xl">📄</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-gray-300 text-sm font-medium">Current resume</p>
@@ -344,7 +380,8 @@ function ProfilePage() {
                       href={user.resumeUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-indigo-400 hover:text-indigo-300 text-xs underline"
+                      download
+                      className="text-indigo-400 hover:text-indigo-300 text-xs underline inline-block"
                     >
                       View / Download
                     </a>
@@ -352,20 +389,28 @@ function ProfilePage() {
                 </div>
               )}
 
+              {/* AI analyzing banner */}
+              {aiAnalyzing && (
+                <div className="flex items-center gap-2.5 bg-indigo-900/30 border border-indigo-700/50 text-indigo-300 px-4 py-3 rounded-xl text-sm mb-4">
+                  <span className="w-4 h-4 border-2 border-t-indigo-300 border-indigo-300/30 rounded-full animate-spin flex-shrink-0" />
+                  Analyzing resume with AI... Skills will update automatically when done.
+                </div>
+              )}
+
               <label
-                className={`cursor-pointer inline-flex items-center gap-2 bg-gray-700 hover:bg-gray-600 border border-gray-600 hover:border-gray-500 text-gray-300 hover:text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                  uploadingResume ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
+                className={`cursor-pointer inline-flex items-center gap-2 bg-gray-700 hover:bg-gray-600 border border-gray-600 hover:border-gray-500 text-gray-300 hover:text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${uploadingResume ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
               >
                 {uploadingResume ? (
                   <>
                     <span className="w-4 h-4 border-2 border-t-white border-white/30 rounded-full animate-spin" />
-                    Analyzing with AI...
+                    Uploading...
                   </>
                 ) : (
                   <>📤 {user?.resumeUrl ? 'Replace Resume' : 'Upload Resume'}</>
                 )}
                 <input
+                  ref={resumeInputRef}
                   type="file"
                   accept=".pdf,.doc,.docx"
                   onChange={handleResumeChange}
@@ -376,6 +421,11 @@ function ProfilePage() {
               <p className="text-gray-500 text-xs mt-2">
                 Accepted formats: PDF, DOC, DOCX — max 10MB
               </p>
+              {resumeError && (
+                <p className="text-red-400 text-xs mt-2 flex items-center gap-1">
+                  <span>⚠️</span> {resumeError}
+                </p>
+              )}
             </div>
 
             {/* AI Resume Analysis */}

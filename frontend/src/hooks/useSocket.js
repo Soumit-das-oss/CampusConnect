@@ -10,12 +10,13 @@ const SOCKET_URL = import.meta.env.VITE_API_URL
 function useSocket() {
   const token = useUserStore((state) => state.token)
   const isAuthenticated = useUserStore((state) => state.isAuthenticated)
+  const updateUser = useUserStore((state) => state.updateUser)
+  const setResumeAiAnalyzing = useUserStore((state) => state.setResumeAiAnalyzing)
   const queryClient = useQueryClient()
   const socketRef = useRef(null)
 
   useEffect(() => {
     if (!isAuthenticated || !token) {
-      // Disconnect if logged out
       if (socketRef.current) {
         socketRef.current.disconnect()
         socketRef.current = null
@@ -23,7 +24,6 @@ function useSocket() {
       return
     }
 
-    // Connect with auth token
     const socket = io(SOCKET_URL, {
       auth: { token },
       transports: ['websocket', 'polling'],
@@ -36,10 +36,35 @@ function useSocket() {
     })
 
     socket.on('new_event', () => {
-      // Invalidate notifications so the bell updates
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
-      // Also refresh events list
       queryClient.invalidateQueries({ queryKey: ['events'] })
+    })
+
+    // Incoming chat message from another user
+    socket.on('new_message', ({ message, sender }) => {
+      const senderId = sender?._id || message?.senderId?.toString()
+      // Append to the open conversation cache if it's already loaded
+      if (senderId) {
+        queryClient.setQueryData(['messages', senderId], (old) => {
+          if (!old) return old
+          const already = old.messages.some((m) => m._id === message._id)
+          if (already) return old
+          return { ...old, messages: [...old.messages, message] }
+        })
+      }
+      // Refresh conversations list so unread badge + last message update
+      queryClient.invalidateQueries({ queryKey: ['messages'] })
+    })
+
+    // AI resume extraction completed in background on the server
+    socket.on('resume:analyzed', ({ resumeData, skills, error }) => {
+      setResumeAiAnalyzing(false)
+      if (resumeData) {
+        updateUser({ resumeData, skills })
+      }
+      if (error) {
+        console.warn('[Resume AI] Background extraction failed:', error)
+      }
     })
 
     socket.on('connect_error', () => {
@@ -50,7 +75,7 @@ function useSocket() {
       socket.disconnect()
       socketRef.current = null
     }
-  }, [isAuthenticated, token, queryClient])
+  }, [isAuthenticated, token, queryClient, updateUser, setResumeAiAnalyzing])
 }
 
 export default useSocket

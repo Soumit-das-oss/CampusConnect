@@ -8,8 +8,11 @@ const useUserStore = create(
       token: null,
       isAuthenticated: false,
       _hasHydrated: false,
+      resumeAiAnalyzing: false,
 
       setHasHydrated: (val) => set({ _hasHydrated: val }),
+
+      setResumeAiAnalyzing: (val) => set({ resumeAiAnalyzing: val }),
 
       setUser: (user, token) => {
         if (token) {
@@ -26,7 +29,7 @@ const useUserStore = create(
 
       logout: () => {
         localStorage.removeItem('token')
-        set({ user: null, token: null, isAuthenticated: false })
+        set({ user: null, token: null, isAuthenticated: false, resumeAiAnalyzing: false })
       },
     }),
     {

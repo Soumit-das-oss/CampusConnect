@@ -4,12 +4,16 @@ import { useQuery } from '@tanstack/react-query'
 import Navbar from '../components/Navbar'
 import Sidebar from '../components/Sidebar'
 import MarketplaceItemCard from '../components/MarketplaceItemCard'
+import useAuth from '../hooks/useAuth'
 import { getListings } from '../services/marketplaceService'
 
-const FILTERS = [
+const CATEGORIES = [
   { value: 'all', label: 'All Items' },
-  { value: 'available', label: 'Available' },
-  { value: 'sold', label: 'Sold' },
+  { value: 'books', label: 'Books' },
+  { value: 'electronics', label: 'Electronics' },
+  { value: 'furniture', label: 'Furniture' },
+  { value: 'clothing', label: 'Clothing' },
+  { value: 'other', label: 'Other' },
 ]
 
 function SkeletonCard() {
@@ -29,7 +33,8 @@ function SkeletonCard() {
 }
 
 function MarketplacePage() {
-  const [statusFilter, setStatusFilter] = useState('all')
+  const [categoryFilter, setCategoryFilter] = useState('all')
+  const { user } = useAuth()
 
   const { data: listings = [], isLoading } = useQuery({
     queryKey: ['marketplace'],
@@ -37,12 +42,15 @@ function MarketplacePage() {
   })
 
   const filteredListings =
-    statusFilter === 'all'
+    categoryFilter === 'all'
       ? listings
-      : listings.filter((item) => item.status === statusFilter)
+      : listings.filter((item) =>
+          item.category?.toLowerCase() === categoryFilter.toLowerCase()
+        )
 
-  const availableCount = listings.filter((l) => l.status === 'available').length
-  const soldCount = listings.filter((l) => l.status === 'sold').length
+  const myListingsCount = listings.filter(
+    (l) => (l.sellerId?._id || l.sellerId) === (user?._id || user?.id)
+  ).length
 
   return (
     <div className="min-h-screen bg-gray-900">
@@ -68,11 +76,10 @@ function MarketplacePage() {
           </div>
 
           {/* Stats strip */}
-          <div className="grid grid-cols-3 gap-3 mb-6">
+          <div className="grid grid-cols-2 gap-3 mb-6">
             {[
-              { label: 'Total', value: listings.length, color: 'text-white' },
-              { label: 'Available', value: availableCount, color: 'text-green-400' },
-              { label: 'Sold', value: soldCount, color: 'text-red-400' },
+              { label: 'Available Listings', value: listings.length, color: 'text-green-400' },
+              { label: 'My Listings', value: myListingsCount, color: 'text-indigo-400' },
             ].map((s) => (
               <div
                 key={s.label}
@@ -84,19 +91,19 @@ function MarketplacePage() {
             ))}
           </div>
 
-          {/* Filter tabs */}
-          <div className="flex gap-2 mb-6">
-            {FILTERS.map((filter) => (
+          {/* Category filter tabs */}
+          <div className="flex gap-2 mb-6 flex-wrap">
+            {CATEGORIES.map((cat) => (
               <button
-                key={filter.value}
-                onClick={() => setStatusFilter(filter.value)}
+                key={cat.value}
+                onClick={() => setCategoryFilter(cat.value)}
                 className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                  statusFilter === filter.value
+                  categoryFilter === cat.value
                     ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/20'
                     : 'bg-gray-800 text-gray-400 hover:text-white border border-gray-700 hover:border-gray-600'
                 }`}
               >
-                {filter.label}
+                {cat.label}
               </button>
             ))}
           </div>
@@ -121,8 +128,8 @@ function MarketplacePage() {
               <p className="text-5xl mb-4">🛒</p>
               <p className="text-white font-semibold text-lg">No listings found</p>
               <p className="text-gray-400 mt-2 text-sm">
-                {statusFilter !== 'all'
-                  ? `No ${statusFilter} items at the moment.`
+                {categoryFilter !== 'all'
+                  ? `No items in the "${categoryFilter}" category yet.`
                   : 'Be the first to create a listing on the marketplace!'}
               </p>
               <Link
@@ -135,7 +142,7 @@ function MarketplacePage() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {filteredListings.map((item) => (
-                <MarketplaceItemCard key={item.id} item={item} />
+                <MarketplaceItemCard key={item._id || item.id} item={item} />
               ))}
             </div>
           )}
@@ -146,3 +153,4 @@ function MarketplacePage() {
 }
 
 export default MarketplacePage
+

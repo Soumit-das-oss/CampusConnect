@@ -40,6 +40,12 @@ const marketplaceListingSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    contactPhone: {
+      type: String,
+      trim: true,
+      maxlength: [15, 'Phone number cannot exceed 15 digits'],
+      default: null,
+    },
     status: {
       type: String,
       enum: {
@@ -55,6 +61,8 @@ const marketplaceListingSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
   }
 );
 

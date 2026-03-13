@@ -27,6 +27,7 @@ function CreateListingPage() {
     description: '',
     price: '',
     category: '',
+    contactPhone: '',
   })
   const [images, setImages] = useState([])
   const [previews, setPreviews] = useState([])
@@ -101,6 +102,9 @@ function CreateListingPage() {
     fd.append('description', formData.description.trim())
     fd.append('price', formData.price)
     fd.append('category', formData.category)
+    if (formData.contactPhone.trim()) {
+      fd.append('contactPhone', formData.contactPhone.trim())
+    }
     images.forEach((img) => fd.append('images', img))
 
     mutate(fd)
@@ -230,6 +234,28 @@ function CreateListingPage() {
                     {errors.category && (
                       <p className="text-red-400 text-xs mt-1.5">⚠ {errors.category}</p>
                     )}
+                  </div>
+                </div>
+
+                {/* Contact Phone */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                    Contact Phone
+                    <span className="text-gray-500 font-normal ml-1">(optional — shown to interested buyers)</span>
+                  </label>
+                  <div className="relative">
+                    <span className="absolute inset-y-0 left-3.5 flex items-center text-gray-400 text-sm pointer-events-none">
+                      📞
+                    </span>
+                    <input
+                      type="tel"
+                      name="contactPhone"
+                      value={formData.contactPhone}
+                      onChange={handleChange}
+                      placeholder="e.g. 9876543210"
+                      className={`${inputBase} border-gray-600 focus:border-indigo-500 focus:ring-indigo-500 pl-10`}
+                      maxLength={15}
+                    />
                   </div>
                 </div>
 

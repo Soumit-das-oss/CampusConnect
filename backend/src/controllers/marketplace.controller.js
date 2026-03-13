@@ -24,7 +24,7 @@ const uploadListingImages = uploadImage.array('images', 5);
 
 async function createListingHandler(req, res, next) {
   try {
-    const { title, description, price, category } = req.body;
+    const { title, description, price, category, contactPhone } = req.body;
 
     if (!title || !description || price === undefined || price === null || price === '') {
       return res.status(400).json({
@@ -52,6 +52,7 @@ async function createListingHandler(req, res, next) {
       price: parsedPrice,
       images,
       category: category || null,
+      contactPhone: contactPhone?.trim() || null,
       sellerId: req.user._id,
       collegeId,
     });

@@ -34,6 +34,18 @@ const eventSchema = new mongoose.Schema(
       },
       default: 'other',
     },
+    customCategory: {
+      type: String,
+      trim: true,
+      maxlength: [100, 'Custom category cannot exceed 100 characters'],
+      default: null,
+    },
+    meetLink: {
+      type: String,
+      trim: true,
+      maxlength: [500, 'Meet link cannot exceed 500 characters'],
+      default: null,
+    },
     imageUrl: {
       type: String,
       default: null,

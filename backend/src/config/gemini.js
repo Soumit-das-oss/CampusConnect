@@ -1,12 +1,14 @@
 'use strict';
 
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const OpenAI = require('openai');
 
-if (!process.env.GEMINI_API_KEY) {
-  console.warn('⚠️  GEMINI_API_KEY not set — resume AI extraction will be disabled.');
+if (!process.env.GROK_API_KEY) {
+  console.warn('⚠️  GROK_API_KEY not set — resume AI extraction will be disabled.');
 }
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' });
+const grokClient = new OpenAI({
+  apiKey: process.env.GROK_API_KEY || '',
+  baseURL: 'https://api.groq.com/openai/v1',
+});
 
-module.exports = { model };
+module.exports = { grokClient };

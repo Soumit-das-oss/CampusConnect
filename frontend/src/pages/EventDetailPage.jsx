@@ -94,7 +94,9 @@ function EventDetailPage() {
                 </div>
               )}
               <span className={`absolute top-3 left-3 text-xs font-semibold px-3 py-1 rounded-full border ${colorClass}`}>
-                {event.category || 'other'}
+                {event.category === 'other' && event.customCategory
+                  ? event.customCategory
+                  : event.category || 'other'}
               </span>
               {isPast && (
                 <span className="absolute top-3 right-3 text-xs font-semibold px-3 py-1 rounded-full bg-gray-900/80 text-gray-400 border border-gray-600/40">
@@ -118,6 +120,23 @@ function EventDetailPage() {
                 </div>
               )}
             </div>
+
+            {/* Meet link */}
+            {event.meetLink && (
+              <a
+                href={event.meetLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 bg-indigo-600/10 border border-indigo-500/30 hover:border-indigo-500/60 hover:bg-indigo-600/20 rounded-xl px-5 py-3.5 mb-6 transition-colors group"
+              >
+                <span className="text-2xl">🔗</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-indigo-400 font-semibold text-sm group-hover:text-indigo-300">Join Meeting / Online Event</p>
+                  <p className="text-gray-500 text-xs truncate mt-0.5">{event.meetLink}</p>
+                </div>
+                <span className="text-indigo-500 text-xs font-medium flex-shrink-0">Open →</span>
+              </a>
+            )}
 
             {/* Description */}
             <div className="bg-gray-800 border border-gray-700/60 rounded-xl p-5 mb-5">

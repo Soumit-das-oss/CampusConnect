@@ -15,6 +15,7 @@ import ConnectionsPage from './pages/ConnectionsPage'
 import EventsPage from './pages/EventsPage'
 import CreateEventPage from './pages/CreateEventPage'
 import EventDetailPage from './pages/EventDetailPage'
+import MessagesPage from './pages/MessagesPage'
 
 function ProtectedRoute({ children }) {
   const isAuthenticated = useUserStore((state) => state.isAuthenticated)
@@ -53,6 +54,8 @@ function App() {
       <Route path="/marketplace/:id" element={<ProtectedRoute><MarketplaceItemPage /></ProtectedRoute>} />
       <Route path="/marketplace" element={<ProtectedRoute><MarketplacePage /></ProtectedRoute>} />
       <Route path="/connections" element={<ProtectedRoute><ConnectionsPage /></ProtectedRoute>} />
+      <Route path="/messages/:userId" element={<ProtectedRoute><MessagesPage /></ProtectedRoute>} />
+      <Route path="/messages" element={<ProtectedRoute><MessagesPage /></ProtectedRoute>} />
       <Route path="/events/create" element={<ProtectedRoute><CreateEventPage /></ProtectedRoute>} />
       <Route path="/events/:id" element={<ProtectedRoute><EventDetailPage /></ProtectedRoute>} />
       <Route path="/events" element={<ProtectedRoute><EventsPage /></ProtectedRoute>} />

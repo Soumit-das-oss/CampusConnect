@@ -6,6 +6,7 @@ const navItems = [
   { to: '/events', icon: '📅', label: 'Events' },
   { to: '/marketplace', icon: '🛒', label: 'Marketplace' },
   { to: '/connections', icon: '🔗', label: 'Connections' },
+  { to: '/messages', icon: '💬', label: 'Messages' },
   { to: '/profile', icon: '👤', label: 'My Profile' },
 ]
 

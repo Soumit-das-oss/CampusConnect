@@ -43,6 +43,8 @@ function init(httpServer) {
     if (collegeId) {
       socket.join(`college:${collegeId}`);
     }
+    // Personal room for direct user notifications (e.g. resume AI results)
+    socket.join(`user:${socket.user._id}`);
 
     socket.on('disconnect', () => {
       // cleanup handled automatically by socket.io

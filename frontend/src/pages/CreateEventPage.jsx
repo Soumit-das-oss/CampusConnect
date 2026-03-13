@@ -18,6 +18,8 @@ function CreateEventPage() {
     date: '',
     venue: '',
     category: 'other',
+    customCategory: '',
+    meetLink: '',
   })
   const [bannerFile, setBannerFile] = useState(null)
   const [bannerPreview, setBannerPreview] = useState(null)
@@ -68,6 +70,11 @@ function CreateEventPage() {
     setErrors((prev) => ({ ...prev, [name]: '', general: '' }))
   }
 
+  // Minimum selectable datetime = right now (blocks past dates)
+  const minDateTime = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
+    .toISOString()
+    .slice(0, 16)
+
   const handleBannerChange = (e) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -88,6 +95,7 @@ function CreateEventPage() {
     else if (formData.title.trim().length < 3) newErrors.title = 'Title must be at least 3 characters.'
     if (!formData.description.trim()) newErrors.description = 'Description is required.'
     if (!formData.date) newErrors.date = 'Event date is required.'
+    else if (new Date(formData.date) < new Date()) newErrors.date = 'Event date cannot be in the past.'
     return newErrors
   }
 
@@ -103,7 +111,9 @@ function CreateEventPage() {
     fd.append('description', formData.description.trim())
     fd.append('date', formData.date)
     fd.append('category', formData.category)
+    if (formData.category === 'other' && formData.customCategory.trim()) fd.append('customCategory', formData.customCategory.trim())
     if (formData.venue.trim()) fd.append('venue', formData.venue.trim())
+    if (formData.meetLink.trim()) fd.append('meetLink', formData.meetLink.trim())
     if (bannerFile) fd.append('banner', bannerFile)
     mutate(fd)
   }
@@ -180,6 +190,7 @@ function CreateEventPage() {
                       name="date"
                       value={formData.date}
                       onChange={handleChange}
+                      min={minDateTime}
                       className={inputClass('date') + ' [color-scheme:dark]'}
                     />
                     {errors.date && <p className="text-red-400 text-xs mt-1">{errors.date}</p>}
@@ -204,6 +215,22 @@ function CreateEventPage() {
                   </div>
                 </div>
 
+                {formData.category === 'other' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                      Specify Category
+                    </label>
+                    <input
+                      type="text"
+                      name="customCategory"
+                      value={formData.customCategory}
+                      onChange={handleChange}
+                      placeholder="e.g. Alumni Meet, Tech Talk, Expo..."
+                      className={inputClass('customCategory')}
+                    />
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-1.5">
                     Venue
@@ -216,6 +243,24 @@ function CreateEventPage() {
                     placeholder="e.g. Auditorium / Main Hall / Online"
                     className={inputClass('venue')}
                   />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                    Meeting / Invite Link{' '}
+                    <span className="text-gray-500 font-normal">(optional)</span>
+                  </label>
+                  <input
+                    type="url"
+                    name="meetLink"
+                    value={formData.meetLink}
+                    onChange={handleChange}
+                    placeholder="https://meet.google.com/... or any invite link"
+                    className={inputClass('meetLink')}
+                  />
+                  <p className="text-gray-500 text-xs mt-1">
+                    Google Meet, Zoom, Teams, or any online meeting link
+                  </p>
                 </div>
 
                 {/* Banner / Poster Upload */}

@@ -9,6 +9,7 @@ const connectionRoutes = require('./routes/connection.routes');
 const marketplaceRoutes = require('./routes/marketplace.routes');
 const eventRoutes = require('./routes/event.routes');
 const notificationRoutes = require('./routes/notification.routes');
+const messageRoutes = require('./routes/message.routes');
 const { errorHandler } = require('./middleware/error.middleware');
 
 const app = express();
@@ -44,6 +45,7 @@ app.use('/api/connections', connectionRoutes);
 app.use('/api/marketplace', marketplaceRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/messages', messageRoutes);
 
 // ─── 404 Handler ─────────────────────────────────────────────────────────────
 

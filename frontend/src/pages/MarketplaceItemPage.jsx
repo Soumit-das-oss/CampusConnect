@@ -13,6 +13,9 @@ function MarketplaceItemPage() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
   const [selectedImage, setSelectedImage] = useState(0)
+  const [contactShown, setContactShown] = useState(false)
+  const [emailCopied, setEmailCopied] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   const { data: item, isLoading, error } = useQuery({
     queryKey: ['marketplace', id],
@@ -220,41 +223,151 @@ function MarketplaceItemPage() {
 
                 {/* Owner actions */}
                 {isOwner && (
-                  <div className="flex gap-3">
-                    {isAvailable && (
-                      <button
-                        onClick={() => handleMarkAsSold()}
-                        disabled={markingSold}
-                        className="flex-1 flex items-center justify-center gap-2 bg-green-700 hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2.5 rounded-lg text-sm font-medium transition-colors"
-                      >
-                        {markingSold ? (
-                          <>
-                            <span className="w-4 h-4 border-2 border-t-white border-white/30 rounded-full animate-spin" />
-                            Updating...
-                          </>
-                        ) : (
-                          '✓ Mark as Sold'
-                        )}
-                      </button>
-                    )}
-                    <button
-                      onClick={() => {
-                        if (window.confirm('Are you sure you want to delete this listing? This action cannot be undone.')) {
-                          handleDelete()
-                        }
-                      }}
-                      disabled={deleting}
-                      className="flex-1 flex items-center justify-center gap-2 bg-red-900/30 hover:bg-red-900/50 border border-red-700/40 disabled:opacity-50 disabled:cursor-not-allowed text-red-400 hover:text-red-300 py-2.5 rounded-lg text-sm font-medium transition-colors"
-                    >
-                      {deleting ? (
-                        <>
-                          <span className="w-4 h-4 border-2 border-t-red-400 border-red-400/30 rounded-full animate-spin" />
-                          Deleting...
-                        </>
-                      ) : (
-                        '🗑 Delete Listing'
+                  <div className="space-y-3">
+                    <div className="flex gap-3">
+                      {isAvailable && (
+                        <button
+                          onClick={() => handleMarkAsSold()}
+                          disabled={markingSold}
+                          className="flex-1 flex items-center justify-center gap-2 bg-green-700 hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2.5 rounded-lg text-sm font-medium transition-colors"
+                        >
+                          {markingSold ? (
+                            <>
+                              <span className="w-4 h-4 border-2 border-t-white border-white/30 rounded-full animate-spin" />
+                              Updating...
+                            </>
+                          ) : (
+                            '✓ Mark as Sold'
+                          )}
+                        </button>
                       )}
-                    </button>
+                      <button
+                        onClick={() => setShowDeleteConfirm(true)}
+                        disabled={deleting || showDeleteConfirm}
+                        className="flex-1 flex items-center justify-center gap-2 bg-red-900/30 hover:bg-red-900/50 border border-red-700/40 disabled:opacity-50 disabled:cursor-not-allowed text-red-400 hover:text-red-300 py-2.5 rounded-lg text-sm font-medium transition-colors"
+                      >
+                        🗑 Delete Listing
+                      </button>
+                    </div>
+
+                    {/* Inline delete confirmation — no browser popup */}
+                    {showDeleteConfirm && (
+                      <div className="bg-red-900/20 border border-red-700/50 rounded-xl p-4">
+                        <p className="text-red-300 font-semibold text-sm mb-1">Delete this listing?</p>
+                        <p className="text-gray-400 text-xs mb-4">
+                          This will permanently remove "{item.title}" from the marketplace.
+                        </p>
+                        <div className="flex gap-3">
+                          <button
+                            onClick={() => {
+                              setShowDeleteConfirm(false)
+                              handleDelete()
+                            }}
+                            disabled={deleting}
+                            className="flex-1 flex items-center justify-center gap-2 bg-red-700 hover:bg-red-600 disabled:opacity-50 text-white py-2 rounded-lg text-sm font-semibold transition-colors"
+                          >
+                            {deleting ? (
+                              <>
+                                <span className="w-4 h-4 border-2 border-t-white border-white/30 rounded-full animate-spin" />
+                                Deleting...
+                              </>
+                            ) : (
+                              'Yes, Delete'
+                            )}
+                          </button>
+                          <button
+                            onClick={() => setShowDeleteConfirm(false)}
+                            className="flex-1 bg-gray-700 hover:bg-gray-600 border border-gray-600 text-gray-300 py-2 rounded-lg text-sm font-medium transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Buyer actions — shown when not the owner and item is available */}
+                {!isOwner && isAvailable && (
+                  <div>
+                    {!contactShown ? (
+                      <button
+                        onClick={() => setContactShown(true)}
+                        className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 rounded-lg text-sm font-semibold transition-colors shadow-md shadow-indigo-600/20"
+                      >
+                        🙋 I'm Interested — Contact Seller
+                      </button>
+                    ) : (
+                      <div className="bg-indigo-900/20 border border-indigo-700/40 rounded-xl p-4">
+                        <div className="flex items-center gap-2 mb-3">
+                          <span className="w-5 h-5 bg-indigo-600 rounded-full flex items-center justify-center text-white text-xs">✓</span>
+                          <p className="text-indigo-300 text-sm font-semibold">You've shown interest!</p>
+                        </div>
+                        <p className="text-gray-400 text-xs mb-3">
+                          Reach out to the seller directly to discuss this listing.
+                        </p>
+                        <div className="space-y-2">
+                          {item.contactPhone && (
+                            <div className="flex items-center gap-3 bg-gray-700/60 border border-gray-600 rounded-lg px-3 py-2.5">
+                              <span className="text-lg">📞</span>
+                              <div className="flex-1">
+                                <p className="text-gray-400 text-xs">Phone</p>
+                                <p className="text-white font-semibold text-sm">{item.contactPhone}</p>
+                              </div>
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(item.contactPhone)
+                                  setEmailCopied(true)
+                                  setTimeout(() => setEmailCopied(false), 2000)
+                                }}
+                                className="text-indigo-400 hover:text-indigo-300 text-xs font-medium"
+                              >
+                                {emailCopied ? '✓ Copied' : 'Copy'}
+                              </button>
+                            </div>
+                          )}
+                          {seller?.email && (
+                            <div className="flex gap-2">
+                              <a
+                                href={`mailto:${seller.email}?subject=Interested in: ${encodeURIComponent(item.title)}`}
+                                className="flex-1 text-center bg-gray-700 hover:bg-gray-600 border border-gray-600 text-gray-200 py-2 rounded-lg text-xs font-medium transition-colors"
+                              >
+                                ✉️ Email Seller
+                              </a>
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(seller.email)
+                                  setEmailCopied(true)
+                                  setTimeout(() => setEmailCopied(false), 2000)
+                                }}
+                                className="flex-1 bg-gray-700 hover:bg-gray-600 border border-gray-600 text-gray-200 py-2 rounded-lg text-xs font-medium transition-colors"
+                              >
+                                {emailCopied ? '✓ Copied!' : '📋 Copy Email'}
+                              </button>
+                            </div>
+                          )}
+                          {!item.contactPhone && !seller?.email && (
+                            <p className="text-gray-500 text-xs text-center">
+                              No contact info — visit the seller's profile to connect.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Item sold — shown to non-owners when sold */}
+                {!isOwner && !isAvailable && (
+                  <div className="bg-red-900/20 border border-red-700/40 rounded-xl p-4 text-center">
+                    <p className="text-red-400 font-semibold text-sm">This item has been sold</p>
+                    <p className="text-gray-500 text-xs mt-1">Check out other available listings.</p>
+                    <Link
+                      to="/marketplace"
+                      className="mt-3 inline-flex items-center gap-1 text-indigo-400 hover:text-indigo-300 text-xs font-medium"
+                    >
+                      ← Browse Marketplace
+                    </Link>
                   </div>
                 )}
               </div>
