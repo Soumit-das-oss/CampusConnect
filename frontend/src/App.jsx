@@ -16,6 +16,8 @@ import EventsPage from './pages/EventsPage'
 import CreateEventPage from './pages/CreateEventPage'
 import EventDetailPage from './pages/EventDetailPage'
 import MessagesPage from './pages/MessagesPage'
+import WorkspacePage from './pages/WorkspacePage'
+import WorkspaceDetailPage from './pages/WorkspaceDetailPage'
 
 function ProtectedRoute({ children }) {
   const isAuthenticated = useUserStore((state) => state.isAuthenticated)
@@ -56,6 +58,8 @@ function App() {
       <Route path="/connections" element={<ProtectedRoute><ConnectionsPage /></ProtectedRoute>} />
       <Route path="/messages/:userId" element={<ProtectedRoute><MessagesPage /></ProtectedRoute>} />
       <Route path="/messages" element={<ProtectedRoute><MessagesPage /></ProtectedRoute>} />
+      <Route path="/workspace/:id" element={<ProtectedRoute><WorkspaceDetailPage /></ProtectedRoute>} />
+      <Route path="/workspace" element={<ProtectedRoute><WorkspacePage /></ProtectedRoute>} />
       <Route path="/events/create" element={<ProtectedRoute><CreateEventPage /></ProtectedRoute>} />
       <Route path="/events/:id" element={<ProtectedRoute><EventDetailPage /></ProtectedRoute>} />
       <Route path="/events" element={<ProtectedRoute><EventsPage /></ProtectedRoute>} />

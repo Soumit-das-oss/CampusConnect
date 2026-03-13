@@ -31,3 +31,57 @@
     overflow: hidden;
   }
 }
+
+/* Excalidraw canvas fixes */
+.excalidraw .App-menu_top .buttonList {
+  gap: 0.5rem;
+}
+
+.excalidraw .excalidraw-wrapper {
+  height: 100% !important;
+  width: 100% !important;
+}
+
+.excalidraw .excalidraw__canvas {
+  height: 100% !important;
+  width: 100% !important;
+}
+
+/* Ensure Excalidraw container takes full space */
+.excalidraw {
+  height: 100% !important;
+  width: 100% !important;
+  position: relative !important;
+}
+
+/* Fix for Excalidraw in flex containers */
+.excalidraw > div {
+  height: 100% !important;
+  width: 100% !important;
+}
+
+/* Ensure Excalidraw UI elements are visible */
+.excalidraw .App-menu_top,
+.excalidraw .App-menu_bottom,
+.excalidraw .App-menu_left {
+  z-index: 10 !important;
+  position: relative !important;
+}
+
+/* Make sure toolbar is visible */
+.excalidraw .App-toolbar {
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+/* Fix for missing tools */
+.excalidraw .App-menu_top {
+  display: flex !important;
+  visibility: visible !important;
+}
+
+.excalidraw .buttonList {
+  display: flex !important;
+  visibility: visible !important;
+}

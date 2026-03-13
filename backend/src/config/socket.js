@@ -46,6 +46,26 @@ function init(httpServer) {
     // Personal room for direct user notifications (e.g. resume AI results)
     socket.join(`user:${socket.user._id}`);
 
+    // ── Workspace collaboration ─────────────────────────────────────────
+    // Client emits this when opening a workspace to join its real-time room
+    socket.on('workspace:join', (workspaceId) => {
+      if (workspaceId) socket.join(`workspace:${workspaceId}`);
+    });
+
+    // Client emits this when leaving a workspace
+    socket.on('workspace:leave', (workspaceId) => {
+      if (workspaceId) socket.leave(`workspace:${workspaceId}`);
+    });
+
+    // Client broadcasts tldraw snapshot changes — relay to all OTHER members in the room
+    socket.on('workspace:draw', ({ workspaceId, snapshot }) => {
+      if (!workspaceId) return;
+      socket.to(`workspace:${workspaceId}`).emit('workspace:draw', {
+        snapshot,
+        userId: socket.user._id,
+      });
+    });
+
     socket.on('disconnect', () => {
       // cleanup handled automatically by socket.io
     });

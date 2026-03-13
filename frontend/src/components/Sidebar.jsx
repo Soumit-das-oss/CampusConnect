@@ -7,6 +7,7 @@ const navItems = [
   { to: '/marketplace', icon: '🛒', label: 'Marketplace' },
   { to: '/connections', icon: '🔗', label: 'Connections' },
   { to: '/messages', icon: '💬', label: 'Messages' },
+  { to: '/workspace', icon: '🗂', label: 'Workspace' },
   { to: '/profile', icon: '👤', label: 'My Profile' },
 ]
 

@@ -30,9 +30,9 @@ function handleValidationErrors(req, res) {
 /** Upload a Buffer to AWS S3 or fallback to Cloudinary */
 async function uploadBufferToS3(buffer, originalname) {
   // Check if AWS is configured
-  const useAWS = process.env.AWS_ACCESS_KEY_ID && 
-                 process.env.AWS_SECRET_ACCESS_KEY && 
-                 process.env.AWS_S3_BUCKET_NAME;
+  const useAWS = process.env.AWS_ACCESS_KEY_ID &&
+    process.env.AWS_SECRET_ACCESS_KEY &&
+    process.env.AWS_S3_BUCKET_NAME;
 
   if (useAWS) {
     // Use AWS S3
@@ -40,14 +40,14 @@ async function uploadBufferToS3(buffer, originalname) {
     const baseName = path.basename(originalname || 'resume', ext)
       .replace(/[^a-zA-Z0-9-_]/g, '')
       .slice(0, 50) || 'resume';
-    
+
     const timestamp = Date.now();
     const key = `campusconnect/resumes/${timestamp}-${baseName}${ext}`;
-    
+
     let contentType = 'application/pdf';
     if (ext === '.doc') contentType = 'application/msword';
     if (ext === '.docx') contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-    
+
     const url = await uploadToS3(buffer, key, contentType);
     return { secure_url: url };
   } else {
@@ -381,7 +381,7 @@ async function deleteResumeHandler(req, res, next) {
     console.log(`[Resume] Delete request from user: ${req.user?._id}`);
 
     const user = await findUserById(req.user._id);
-    
+
     if (!user.resumeUrl) {
       return res.status(404).json({
         success: false,
@@ -391,9 +391,9 @@ async function deleteResumeHandler(req, res, next) {
 
     // Delete from storage (S3 or Cloudinary)
     try {
-      const useAWS = process.env.AWS_ACCESS_KEY_ID && 
-                     process.env.AWS_SECRET_ACCESS_KEY && 
-                     process.env.AWS_S3_BUCKET_NAME;
+      const useAWS = process.env.AWS_ACCESS_KEY_ID &&
+        process.env.AWS_SECRET_ACCESS_KEY &&
+        process.env.AWS_S3_BUCKET_NAME;
 
       if (useAWS && user.resumeUrl.includes('amazonaws.com')) {
         console.log('[Resume] Deleting from S3:', user.resumeUrl);
@@ -414,9 +414,9 @@ async function deleteResumeHandler(req, res, next) {
     }
 
     // Clear from database
-    await updateUserProfile(req.user._id, { 
+    await updateUserProfile(req.user._id, {
       resumeUrl: null,
-      resumeData: null 
+      resumeData: null
     });
     console.log('[Resume] Database record cleared');
 
