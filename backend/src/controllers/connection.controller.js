@@ -44,11 +44,21 @@ async function sendRequest(req, res, next) {
     }
 
     // Check receiver exists
-    const receiver = await User.findById(receiverId).select('_id name');
+    const receiver = await User.findById(receiverId).select('_id name collegeId');
     if (!receiver) {
       return res.status(404).json({
         success: false,
         message: 'User not found.',
+      });
+    }
+
+    // Enforce same-campus rule
+    const senderCampus = req.user.collegeId?._id?.toString() || req.user.collegeId?.toString();
+    const receiverCampus = receiver.collegeId?._id?.toString() || receiver.collegeId?.toString();
+    if (!senderCampus || !receiverCampus || senderCampus !== receiverCampus) {
+      return res.status(403).json({
+        success: false,
+        message: 'You can only connect with students from your own campus.',
       });
     }
 
