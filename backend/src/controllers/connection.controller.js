@@ -222,6 +222,8 @@ async function getConnections(req, res, next) {
  */
 async function getPendingRequests(req, res, next) {
   try {
+    const campusId = (req.user.collegeId?._id || req.user.collegeId)?.toString();
+
     const requests = await Connection.find({
       receiverId: req.user._id,
       status: 'pending',
@@ -229,10 +231,16 @@ async function getPendingRequests(req, res, next) {
       .populate('senderId', 'name email avatarUrl bio skills collegeId')
       .sort({ createdAt: -1 });
 
+    // Only surface requests from students on the same campus
+    const filtered = requests.filter((r) => {
+      const senderCampus = (r.senderId?.collegeId?._id || r.senderId?.collegeId)?.toString();
+      return campusId && senderCampus === campusId;
+    });
+
     res.status(200).json({
       success: true,
-      count: requests.length,
-      data: { requests },
+      count: filtered.length,
+      data: { requests: filtered },
     });
   } catch (error) {
     next(error);
